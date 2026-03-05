@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -65,7 +66,13 @@ namespace QualificationRunner.Core.Services
          StaticFiles staticFiles = await copyStaticFiles(qualificationPlan);
 
          _logger.AddInfo("Starting validation runs...");
-         var validations = await Task.WhenAll(projectConfigurations.Select(validateProject));
+         var numberOfCores = Environment.ProcessorCount;
+         var validationResults = new ConcurrentBag<QualificationRunResult>();
+         Parallel.ForEach(projectConfigurations, new ParallelOptions { MaxDegreeOfParallelism = numberOfCores }, config =>
+         {
+            validationResults.Add(validateProject(config).GetAwaiter().GetResult());
+         });
+         var validations = validationResults.ToArray();
 
          var invalidConfigurations = validations.Where(x => !x.Success).ToList();
          if (invalidConfigurations.Any())
@@ -73,7 +80,12 @@ namespace QualificationRunner.Core.Services
 
          //Run all qualification projects
          _logger.AddInfo("Starting qualification runs...");
-         var runResults = await Task.WhenAll(projectConfigurations.Select(runQualification));
+         var runResultsBag = new ConcurrentBag<QualificationRunResult>();
+         Parallel.ForEach(projectConfigurations, new ParallelOptions { MaxDegreeOfParallelism = numberOfCores }, config =>
+         {
+            runResultsBag.Add(runQualification(config).GetAwaiter().GetResult());
+         });
+         var runResults = runResultsBag.ToArray();
          var invalidRunResults = runResults.Where(x => !x.Success).ToList();
          if (invalidRunResults.Any())
             throw new QualificationRunException(errorMessageFrom(invalidRunResults));

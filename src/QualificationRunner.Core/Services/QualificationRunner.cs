@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -67,12 +66,7 @@ namespace QualificationRunner.Core.Services
 
          _logger.AddInfo("Starting validation runs...");
          var numberOfCores = Environment.ProcessorCount;
-         var validationResults = new ConcurrentBag<QualificationRunResult>();
-         Parallel.ForEach(projectConfigurations, new ParallelOptions { MaxDegreeOfParallelism = numberOfCores }, config =>
-         {
-            validationResults.Add(validateProject(config).GetAwaiter().GetResult());
-         });
-         var validations = validationResults.ToArray();
+         var validations = await runThrottled(projectConfigurations, validateProject, numberOfCores);
 
          var invalidConfigurations = validations.Where(x => !x.Success).ToList();
          if (invalidConfigurations.Any())
@@ -80,12 +74,7 @@ namespace QualificationRunner.Core.Services
 
          //Run all qualification projects
          _logger.AddInfo("Starting qualification runs...");
-         var runResultsBag = new ConcurrentBag<QualificationRunResult>();
-         Parallel.ForEach(projectConfigurations, new ParallelOptions { MaxDegreeOfParallelism = numberOfCores }, config =>
-         {
-            runResultsBag.Add(runQualification(config).GetAwaiter().GetResult());
-         });
-         var runResults = runResultsBag.ToArray();
+         var runResults = await runThrottled(projectConfigurations, runQualification, numberOfCores);
          var invalidRunResults = runResults.Where(x => !x.Success).ToList();
          if (invalidRunResults.Any())
             throw new QualificationRunException(errorMessageFrom(invalidRunResults));
@@ -98,6 +87,30 @@ namespace QualificationRunner.Core.Services
       }
 
       private Task updateProjectsFullPath(IReadOnlyList<Project> projects) => Task.WhenAll(projects.Select(updateProjectFullPath));
+
+      private async Task<QualificationRunResult[]> runThrottled(
+         QualifcationConfiguration[] configurations,
+         Func<QualifcationConfiguration, Task<QualificationRunResult>> action,
+         int maxDegreeOfParallelism)
+      {
+         using (var semaphore = new SemaphoreSlim(maxDegreeOfParallelism))
+         {
+            var tasks = configurations.Select(async config =>
+            {
+               await semaphore.WaitAsync();
+               try
+               {
+                  return await action(config);
+               }
+               finally
+               {
+                  semaphore.Release();
+               }
+            }).ToArray();
+
+            return await Task.WhenAll(tasks);
+         }
+      }
 
       private async Task<string> downloadRemoteFile(string url, string locationInTempFolder, string type)
       {

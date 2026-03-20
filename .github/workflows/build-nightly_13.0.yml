@@ -64,11 +64,30 @@ jobs:
       - name: Install PK-Sim Portable (for Integration Tests)
         shell: pwsh
         run: |
+          $headers = @{
+            Authorization = "Bearer ${{ secrets.GITHUB_TOKEN }}"
+            Accept        = "application/vnd.github+json"
+          }
+
+          # Find the latest successful run of the PK-Sim nightly v13 workflow
+          $runsUrl = "https://api.github.com/repos/Open-Systems-Pharmacology/PK-Sim/actions/workflows/build-nightly_v13.yml/runs?status=success&per_page=1"
+          $runs = Invoke-RestMethod -Uri $runsUrl -Headers $headers
+          if (-not $runs.workflow_runs -or $runs.workflow_runs.Count -eq 0) { throw "No successful runs found for build-nightly_v13.yml" }
+          $latestRunId = $runs.workflow_runs[0].id
+          Write-Host "Latest successful PK-Sim nightly run ID: $latestRunId"
+
+          # Find the PKSim Portable artifact in that run
+          $artifactsUrl = "https://api.github.com/repos/Open-Systems-Pharmacology/PK-Sim/actions/runs/$latestRunId/artifacts"
+          $artifacts = Invoke-RestMethod -Uri $artifactsUrl -Headers $headers
+          $portableArtifact = $artifacts.artifacts | Where-Object { $_.name -like "PKSim Portable*" } | Select-Object -First 1
+          if (-not $portableArtifact) { throw "PKSim Portable artifact not found in run $latestRunId" }
+          Write-Host "Found artifact: $($portableArtifact.name) (ID: $($portableArtifact.id))"
+
           $installDir = Join-Path $PWD "PK-Sim"
           New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 
           $zipPath = Join-Path $env:RUNNER_TEMP "PKSim-Portable.zip"
-          Invoke-WebRequest -Uri "https://api.github.com/repos/Open-Systems-Pharmacology/PK-Sim/actions/artifacts/5944139982/zip" -OutFile $zipPath -Headers @{Authorization = "Bearer ${{ secrets.GITHUB_TOKEN }}"}
+          Invoke-WebRequest -Uri $portableArtifact.archive_download_url -OutFile $zipPath -Headers $headers
 
           Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
 

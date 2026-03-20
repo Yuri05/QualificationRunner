@@ -79,7 +79,7 @@ jobs:
           # Find the PKSim Portable artifact in that run
           $artifactsUrl = "https://api.github.com/repos/Open-Systems-Pharmacology/PK-Sim/actions/runs/$latestRunId/artifacts"
           $artifacts = Invoke-RestMethod -Uri $artifactsUrl -Headers $headers
-          $portableArtifact = $artifacts.artifacts | Where-Object { $_.name -like "PKSim Portable*" } | Select-Object -First 1
+          $portableArtifact = $artifacts.artifacts | Where-Object { $_.name -like "*Portable*" } | Select-Object -First 1
           if (-not $portableArtifact) { throw "PKSim Portable artifact not found in run $latestRunId" }
           Write-Host "Found artifact: $($portableArtifact.name) (ID: $($portableArtifact.id))"
 

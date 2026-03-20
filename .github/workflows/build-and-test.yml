@@ -36,17 +36,9 @@ jobs:
           dotnet build QualificationRunner.sln /p:Version=${{env.APP_VERSION}}
 
       - name: Install PK-Sim Portable (for Integration Tests)
-        shell: pwsh
-        run: |
-          $installDir = Join-Path $PWD "PK-Sim"
-          New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-
-          $zipPath = Join-Path $env:RUNNER_TEMP "PKSim-Portable.zip"
-          Invoke-WebRequest -Uri "https://github.com/Open-Systems-Pharmacology/PK-Sim/releases/download/v12.2.112/PKSim-Portable.12.2.112.zip" -OutFile $zipPath
-
-          Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
-
-          "PKSIM_INSTALLATION_FOLDER=$installDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+        uses: ./.github/actions/install-pksim-portable
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Test
         run: dotnet test QualificationRunner.sln --no-build -v normal  --logger:"html;LogFileName=../../../testLog_Windows.html"

@@ -35,8 +35,17 @@ jobs:
           echo "LATEST_COMMIT_TIMESPAN=${timespan}" >> $GITHUB_ENV
           echo "LATEST_COMMIT_TIMESPAN=${timespan}" >> $GITHUB_OUTPUT
 
+  latest-pksim-portable:
+    uses: Open-Systems-Pharmacology/Workflows/.github/workflows/latest-artifact.yml@main
+    with:
+      repo-name: PK-Sim
+      action-name: build-nightly_v13.yml
+      artifact-pattern: PKSim Portable
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
   build-nightly:
-    needs: get-latest-commit-timespan
+    needs: [get-latest-commit-timespan, latest-pksim-portable]
     # the build-nightly job should be run in 2 cases:
     # - either the workflow was triggered manually (on 'workflow_dispatch')
     # - or the workflow was triggered on schedule and last repository commit is not older than 24h (=86400 sec)
@@ -61,12 +70,20 @@ jobs:
         run: |
           dotnet build QualificationRunner.sln /p:Version=${{env.APP_VERSION}}
 
-      - name: Install PK-Sim Portable (for Integration Tests)
-        uses: ./.github/actions/install-pksim-portable
+      - name: Download PK-Sim Portable
+        uses: actions/download-artifact@v4
         with:
+          name: ${{ needs.latest-pksim-portable.outputs.artifact-name }}
+          path: ./PK-Sim
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          pksim-workflow: build-nightly_v13.yml
-          pksim-branch: V13
+          repository: Open-Systems-Pharmacology/PK-Sim
+          run-id: ${{ needs.latest-pksim-portable.outputs.run-id }}
+
+      - name: Set PK-Sim Installation Folder
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $PWD "PK-Sim"
+          "PKSIM_INSTALLATION_FOLDER=$installDir" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Test
         run: dotnet test QualificationRunner.sln --no-build -v normal  --logger:"html;LogFileName=../../../testLog_Windows.html"

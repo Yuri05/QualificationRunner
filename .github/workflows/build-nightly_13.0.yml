@@ -65,6 +65,8 @@ jobs:
         uses: ./.github/actions/install-pksim-portable
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          pksim-workflow: build-nightly_v13.yml
+          pksim-branch: V13
 
       - name: Test
         run: dotnet test QualificationRunner.sln --no-build -v normal  --logger:"html;LogFileName=../../../testLog_Windows.html"

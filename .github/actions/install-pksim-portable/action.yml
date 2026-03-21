@@ -10,12 +10,10 @@ inputs:
     required: true
   pksim-workflow:
     description: Workflow filename in the PK-Sim repository
-    required: false
-    default: build-nightly_v13.yml
+    required: true
   pksim-branch:
     description: Branch in the PK-Sim repository to resolve artifacts from
-    required: false
-    default: V13
+    required: true
 
 runs:
   using: composite
